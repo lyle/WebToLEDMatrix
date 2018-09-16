@@ -11,20 +11,24 @@
 #include "LedControl.h"
 #include <avr/pgmspace.h>
 
+//LedControl lc=LedControl(12,11,10,1);
 LedControl lc=LedControl(2,4,3,1);
 
-const char kHostname[] = "lyle.troxell.com";
-const char kPath[] = "/beMineMessage.txt";
+// https://lyle.troxell.com/beMineMessage.txt
+const char kHostname[] = "lyle.github.io";
+//const char kPath[] = "/dev/beMineMessage.txt";
+const char kPath[] = "/dev/by-mine";
+
 const int kPort = 80;
 
 byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
 
 // Number of milliseconds to wait without receiving any data before we give up
-const int kNetworkTimeout =20L*1000L; //20 seconds timeout
+const int kNetworkTimeout =20L*1000L; //20 seconds before giving up
 // Number of milliseconds to wait if no data is available before trying again
-const int kNetworkDelay = 1000;
+const int kNetworkDelay = 1000; //Between Requests to the server
 
-byte matrixVals[] = {B00000000,B00000000,B00000000,B00000000,B00000000,B00000000,B00000000,B00000000 };
+byte matrixVals[] = { 0,0,0,0,0,0,0,0 };
 
 
 // time between web requests
@@ -43,14 +47,22 @@ void startLEDMatrix() {
 void setup()
 {
   startLEDMatrix();
-
   // initialize serial communications at 9600 bps:
   Serial.begin(9600); 
-
-  while (Ethernet.begin(mac) != 1)
+ 
+  Serial.println("We Are Booting Up");
+  bool attemptNetwork = true;
+  while (attemptNetwork)
   {
-    Serial.println("Error getting IP address via DHCP, trying again...");
-    delay(15000);
+    Serial.println("About to get IP address via DHCP");
+    int d = Ethernet.begin(mac);
+    Serial.print("Ethernet Status:");
+    Serial.println(d);
+    if (d==1) {
+      attemptNetwork = false;
+    } else {
+      delay(1500); 
+    }
   }
   Serial.print("My IP address: ");
   Serial.println(Ethernet.localIP());
@@ -63,7 +75,6 @@ void shiftMatrix(unsigned char movingLine) {
     temp = matrixVals[i];
     matrixVals[i] = movingLine;
     movingLine = temp;
-    
     lc.setRow(0,7-i, matrixVals[i]);
   }
   
@@ -100,30 +111,12 @@ void httpRequest() {
         
         byte d[1];
         byte modifyInt;
-        int numberOf = 0;
         while ( (http.connected() || http.available()) &&
                ((millis() - timeoutStart) < kNetworkTimeout) ){
             if (http.available()){
-              c =http.read();
-              //c = d[0];
-//              Serial.print(numberOf );
-//              Serial.print('-' );
-//              Serial.print(int(c) );
-//              Serial.print('|');
-              numberOf ++;
-              if (int(c) != 194 && int(c) != 195 ) {
-                //required because the readBytes of http will give two values when the fsb is 1;
-                if (modifyInt) {
-                  c = int(c) + modifyInt;
-                  modifyInt =0;
-                }
-                shiftMatrix(c);
-                delay(500);
-              } else {
-                if (int(c) == 195) {
-                  modifyInt = 64;
-                }
-              }
+              c = http.read();
+              shiftMatrix(c);
+              delay(500);
               bodyLen--;
               // We read something, reset the timeout counter
               timeoutStart = millis();
@@ -148,4 +141,3 @@ void httpRequest() {
   }
   http.stop();
 }
-
